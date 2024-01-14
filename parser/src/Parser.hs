@@ -1,6 +1,10 @@
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+
 module Parser where
 
 import Control.Monad.Combinators.Expr (Operator(..), makeExprParser)
+import Data.Functor
 import Data.Void
 import DatalogAST
 import Text.Megaparsec
@@ -19,7 +23,7 @@ import Text.Megaparsec.Char
 type Parser = Parsec Void String
 
 termParser :: Parser Term
-termParser = (Variable <$> variableParser) <|> (Constant <$> constantParser)
+termParser = Variable <$> variableParser <|> Constant <$> constantParser
 
 -- Parse a variable (assuming it starts with an uppercase letter).
 variableParser :: Parser String
@@ -33,17 +37,17 @@ constantParser =
 -- Parser for arithmetic operators
 arithmeticOperatorParser :: Parser ArithmeticOperator
 arithmeticOperatorParser =
-  (char '+' *> pure Plus)
-    <|> (char '-' *> pure Minus)
-    <|> (char '*' *> pure Times)
-    <|> (char '/' *> pure Divide)
-    <|> (string ">=" *> pure GreaterThanOrEqual)
-    <|> (string "<=" *> pure LessThanOrEqual)
-    <|> (char '>' *> pure GreaterThan)
-    <|> (char '<' *> pure LessThan)
-    <|> (string "!=" *> pure NotEquals)
-    <|> (string "is" *> pure Is)
-    <|> (char '=' *> pure Equals)
+  (char '+' Data.Functor.$> Plus)
+    <|> (char '-' Data.Functor.$> Minus)
+    <|> (char '*' Data.Functor.$> Times)
+    <|> (char '/' Data.Functor.$> Divide)
+    <|> (string ">=" Data.Functor.$> GreaterThanOrEqual)
+    <|> (string "<=" Data.Functor.$> LessThanOrEqual)
+    <|> (char '>' Data.Functor.$> GreaterThan)
+    <|> (char '<' Data.Functor.$> LessThan)
+    <|> (string "!=" Data.Functor.$> NotEquals)
+    <|> (string "is" Data.Functor.$> Is)
+    <|> (char '=' Data.Functor.$> Equals)
 
 -- Parser for arithmetic expressions
 arithmeticExprParser :: Parser ArithmeticExpr
@@ -64,6 +68,11 @@ arithmeticExprParser = makeExprParser recTermParser operatorTable
         ]
       , [binary "is" (ArithmeticBinOp Is)]
       ]
+    binary ::
+         (MonadParsec e s m, Token s ~ Char)
+      => Tokens s
+      -> (a -> a -> a)
+      -> Operator m a
     binary name f = InfixL (f <$ (space *> string name <* space))
 
 -- Parse an atom or a negated atom.
@@ -112,7 +121,7 @@ factParser = atomParser <* char '.' <* space
 
 -- Parse a clause, which can be a fact or a rule.
 clauseParser :: Parser Clause
-clauseParser = (ClauseFact <$> try factParser) <|> (ClauseRule <$> ruleParser)
+clauseParser = ClauseFact <$> try factParser <|> ClauseRule <$> ruleParser
 
 -- Parse a Datalog program (a list of clauses).
 datalogProgramParser :: Parser DatalogProgram
@@ -125,3 +134,4 @@ queryParser = do
   atom <- atomParser
   _ <- char '.'
   return $ Query atom
+
